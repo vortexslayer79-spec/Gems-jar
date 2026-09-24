@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gems Jar - Cloud Simulator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Canvas Confetti CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Fredoka', cursive, sans-serif;
+            touch-action: manipulation;
+        }
+        .glass-jar-shadow {
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), inset 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+        .light .glass-jar-shadow {
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12), inset 0 0 20px rgba(255, 255, 255, 0.7);
+        }
+        .btn-bounce {
+            transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.2s ease, border-color 0.2s ease;
+        }
+        .btn-bounce:active:not(:disabled) {
+            transform: scale(0.94);
+        }
+        .glass-shine {
+            background: linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.08) 40%, rgba(255,255,255,0) 60%, rgba(255,255,255,0.25) 100%);
+        }
+        .pulse-badge {
+            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.95); }
+        }
+    </style>
+</head>
+<body id="appBody" class="dark bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center justify-between p-3 sm:p-6 select-none transition-colors duration-300">
+
+    <!-- Cloud Sync & Header Status Bar -->
+    <header class="w-full max-w-md flex flex-col gap-2 z-20">
+        <!-- Top Controls Bar -->
+        <div class="flex justify-between items-center w-full">
+            <!-- Manual Cloud Save Button -->
+            <button id="manualSaveBtn" onclick="manualSaveToCloud()" class="btn-bounce bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold px-3.5 py-1.5 rounded-full text-xs sm:text-sm shadow-lg flex items-center gap-1.5 border border-cyan-400/40">
+                <i class="fa-solid fa-cloud-arrow-up text-xs"></i>
+                <span id="saveBtnText">Save to Cloud</span>
+            </button>
+
+            <!-- Theme Switcher -->
+            <button id="themeToggleBtn" onclick="toggleTheme()" class="btn-bounce bg-slate-800 dark:bg-slate-800/90 light:bg-white text-amber-400 dark:text-amber-400 light:text-slate-700 border border-slate-700 dark:border-slate-700 light:border-slate-300 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold shadow-md flex items-center gap-1.5">
+                <span id="themeIcon">🌙</span>
+                <span id="themeText">Dark</span>
+            </button>
+        </div>
+
+        <!-- Live Database Sync Status Indicator Banner -->
+        <div class="w-full bg-slate-800/80 dark:bg-slate-800/80 light:bg-white/80 backdrop-blur-md rounded-xl p-2 px-3 border border-slate-700/80 dark:border-slate-700/80 light:border-slate-300/80 flex items-center justify-between text-xs shadow-sm">
+            <div class="flex items-center gap-2">
+                <span id="syncIndicatorDot" class="w-2.5 h-2.5 rounded-full bg-amber-400 pulse-badge"></span>
+                <span id="syncStatusText" class="text-slate-300 dark:text-slate-300 light:text-slate-700 font-medium">Connecting to Database...</span>
+            </div>
+            <span id="lastSaveTime" class="text-slate-400 dark:text-slate-400 light:text-slate-500 text-[11px]">Synced just now</span>
+        </div>
+    </header>
+
+    <!-- Title Header -->
+    <div class="text-center my-2 z-10">
+        <h1 class="text-3xl sm:text-4xl font-bold text-cyan-400 dark:text-cyan-400 light:text-cyan-600 tracking-wide drop-shadow-md flex items-center justify-center gap-2">
+            <span>💎</span> Gems Jar <span>💎</span>
+        </h1>
+        <p class="text-slate-400 dark:text-slate-400 light:text-slate-600 text-xs sm:text-sm mt-0.5">Collect 50 diamonds & auto-sync with Cloud Database!</p>
+    </div>
+
+    <!-- Main Interactive Area -->
+    <main class="w-full max-w-md flex flex-col items-center my-auto relative">
+        
+        <!-- Capacity Counter & Progress Bar Card -->
+        <div class="w-full bg-slate-800/90 dark:bg-slate-800/90 light:bg-white/90 backdrop-blur-md rounded-2xl p-3.5 shadow-lg mb-3 border border-slate-700 dark:border-slate-700 light:border-slate-200 transition-colors duration-300">
+            <div class="flex justify-between items-center mb-1.5 font-semibold">
+                <span class="text-slate-300 dark:text-slate-300 light:text-slate-700 text-sm flex items-center gap-1.5">
+                    <span>💎</span> Gem Capacity
+                </span>
+                <span id="counterText" class="text-cyan-400 dark:text-cyan-400 light:text-cyan-600 text-lg font-bold">0 / 50</span>
+            </div>
+            <!-- Progress Bar -->
+            <div class="w-full bg-slate-700 dark:bg-slate-700 light:bg-slate-200 rounded-full h-3.5 overflow-hidden p-0.5 shadow-inner">
+                <div id="progressBar" class="bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 h-full rounded-full transition-all duration-300 w-0"></div>
+            </div>
+        </div>
+
+        <!-- Glass Jar Container -->
+        <div class="relative w-72 sm:w-80 h-[360px] sm:h-[400px] flex flex-col items-center justify-end">
+            <!-- Jar Lid -->
+            <div class="w-48 sm:w-52 h-8 bg-gradient-to-r from-cyan-700 via-sky-500 to-cyan-800 rounded-t-lg border-b-2 border-cyan-900 shadow-md z-20 flex items-center justify-center">
+                <div class="w-44 sm:w-48 h-2 bg-cyan-200/50 rounded-full"></div>
+            </div>
+            <!-- Jar Rim -->
+            <div class="w-56 sm:w-60 h-5 bg-gradient-to-r from-slate-300 via-white to-slate-400 border border-slate-400 rounded-sm shadow-sm z-10"></div>
+            
+            <!-- Glass Body -->
+            <div class="relative w-full h-[320px] sm:h-[360px] rounded-b-[60px] rounded-t-[20px] border-4 border-white/40 dark:border-white/30 light:border-white/80 bg-white/10 dark:bg-white/10 light:bg-white/30 backdrop-blur-[2px] glass-jar-shadow overflow-hidden flex items-end justify-center">
+                <!-- Highlights & Glass Reflections -->
+                <div class="absolute inset-0 glass-shine pointer-events-none z-30"></div>
+                <div class="absolute top-4 left-4 w-4 h-52 bg-white/40 rounded-full blur-[1px] pointer-events-none z-30"></div>
+                <div class="absolute top-4 right-4 w-2 h-44 bg-white/25 rounded-full blur-[1px] pointer-events-none z-30"></div>
+                
+                <!-- Canvas for 2D Physics Gem Simulation -->
+                <canvas id="jarCanvas" class="w-full h-full z-10"></canvas>
+
+                <!-- Celebratory Full Banner Overlay -->
+                <div id="fullBanner" class="absolute inset-0 bg-slate-950/75 backdrop-blur-md z-40 flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-500">
+                    <div class="bg-slate-900 dark:bg-slate-900 light:bg-white text-slate-100 dark:text-slate-100 light:text-slate-800 rounded-3xl p-6 shadow-2xl text-center transform scale-90 transition-all duration-300 border-4 border-cyan-400 max-w-[85%]" id="fullBannerCard">
+                        <div class="text-5xl mb-2">💎✨</div>
+                        <h2 class="text-2xl font-bold text-cyan-400 dark:text-cyan-400 light:text-cyan-700">JAR FILLED!</h2>
+                        <p class="text-slate-300 dark:text-slate-300 light:text-slate-600 text-xs sm:text-sm mt-1 mb-4">You collected 50 sparkling diamonds! All saved to Cloud.</p>
+                        <button onclick="resetJar()" class="bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold px-6 py-2.5 rounded-full shadow-lg hover:opacity-90 active:scale-95 transition-all text-sm">
+                            Reset & Collect Again 🔄
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls Panel -->
+        <div class="w-full bg-slate-800/90 dark:bg-slate-800/90 light:bg-white/90 backdrop-blur-md rounded-2xl p-3.5 shadow-lg mt-4 border border-slate-700 dark:border-slate-700 light:border-slate-200 space-y-2.5 z-10 transition-colors duration-300">
+            <!-- Add / Remove Grid -->
+            <div class="grid grid-cols-4 gap-2">
+                <button id="btnSub10" onclick="modifyGems(-10)" class="btn-bounce bg-red-950/60 dark:bg-red-950/60 light:bg-red-100 hover:bg-red-900/80 dark:hover:bg-red-900/80 light:hover:bg-red-200 text-red-300 dark:text-red-300 light:text-red-600 border border-red-800/50 dark:border-red-800/50 light:border-red-200 font-bold py-2.5 rounded-xl shadow-sm disabled:opacity-30 disabled:cursor-not-allowed text-sm">
+                    -10
+                </button>
+                <button id="btnSub1" onclick="modifyGems(-1)" class="btn-bounce bg-orange-950/60 dark:bg-orange-950/60 light:bg-orange-100 hover:bg-orange-900/80 dark:hover:bg-orange-900/80 light:hover:bg-orange-200 text-orange-300 dark:text-orange-300 light:text-orange-600 border border-orange-800/50 dark:border-orange-800/50 light:border-orange-200 font-bold py-2.5 rounded-xl shadow-sm disabled:opacity-30 disabled:cursor-not-allowed text-sm">
+                    -1
+                </button>
+                <button id="btnAdd1" onclick="modifyGems(1)" class="btn-bounce bg-emerald-950/60 dark:bg-emerald-950/60 light:bg-emerald-100 hover:bg-emerald-900/80 dark:hover:bg-emerald-900/80 light:hover:bg-emerald-200 text-emerald-300 dark:text-emerald-300 light:text-emerald-600 border border-emerald-800/50 dark:border-emerald-800/50 light:border-emerald-200 font-bold py-2.5 rounded-xl shadow-sm disabled:opacity-30 disabled:cursor-not-allowed text-sm">
+                    +1
+                </button>
+                <button id="btnAdd10" onclick="modifyGems(10)" class="btn-bounce bg-cyan-950/60 dark:bg-cyan-950/60 light:bg-cyan-100 hover:bg-cyan-900/80 dark:hover:bg-cyan-900/80 light:hover:bg-cyan-200 text-cyan-300 dark:text-cyan-300 light:text-cyan-600 border border-cyan-800/50 dark:border-cyan-800/50 light:border-cyan-200 font-bold py-2.5 rounded-xl shadow-sm disabled:opacity-30 disabled:cursor-not-allowed text-sm">
+                    +10
+                </button>
+            </div>
+
+            <!-- Reset & Audio Toggle -->
+            <div class="flex gap-2">
+                <button onclick="resetJar()" class="w-full btn-bounce bg-slate-700/70 dark:bg-slate-700/70 light:bg-slate-100 hover:bg-slate-700 dark:hover:bg-slate-700 light:hover:bg-slate-200 text-slate-200 dark:text-slate-200 light:text-slate-700 border border-slate-600 dark:border-slate-600 light:border-slate-300 font-semibold py-2 rounded-xl shadow-sm flex items-center justify-center gap-1.5 text-xs sm:text-sm">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    Reset Jar
+                </button>
+                <button id="soundToggleBtn" onclick="toggleSound()" class="btn-bounce bg-slate-700/70 dark:bg-slate-700/70 light:bg-slate-100 hover:bg-slate-700 dark:hover:bg-slate-700 light:hover:bg-slate-200 text-slate-200 dark:text-slate-200 light:text-slate-700 border border-slate-600 dark:border-slate-600 light:border-slate-300 px-4 py-2 rounded-xl shadow-sm flex items-center justify-center text-sm">
+                    🔊
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <footer class="mt-3 text-[11px] text-slate-400 dark:text-slate-400 light:text-slate-500 text-center">
+        Real-time Cloud Database Synced Gems Simulator
+    </footer>
+
+    <!-- Firebase JS SDK Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase Configuration & Global Variables
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'gems-jar-default';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "dummy",
+            authDomain: "dummy.firebaseapp.com",
+            projectId: "dummy",
+            storageBucket: "dummy.appspot.com",
+            messagingSenderId: "123",
+            appId: "1:123:web:123"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let currentUser = null;
+        let dbDocRef = null;
+        let isSyncing = false;
+        let autoSaveTimer = null;
+
+        // Update UI Badges for Sync Status
+        function updateSyncStatus(status, message) {
+            const dot = document.getElementById('syncIndicatorDot');
+            const text = document.getElementById('syncStatusText');
+            const lastSave = document.getElementById('lastSaveTime');
+
+            if (!dot || !text) return;
+
+            if (status === 'syncing') {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 pulse-badge';
+                text.innerText = message || 'Syncing to Cloud...';
+            } else if (status === 'saved') {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+                text.innerText = message || 'Cloud Synced';
+                lastSave.innerText = 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } else if (status === 'error') {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-red-400';
+                text.innerText = message || 'Offline / Error';
+            }
+        }
+
+        // Save Gem Count to Cloud Database
+        async function saveGemDataToCloud(count, manualNotice = false) {
+            if (!currentUser || !dbDocRef) {
+                console.warn("Authentication pending. Skipping database save.");
+                return;
+            }
+
+            updateSyncStatus('syncing', 'Saving to Cloud...');
+            isSyncing = true;
+
+            try {
+                await setDoc(dbDocRef, {
+                    gemCount: count,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+
+                isSyncing = false;
+                updateSyncStatus('saved', 'Saved in Cloud Database');
+
+                if (manualNotice) {
+                    const saveBtnText = document.getElementById('saveBtnText');
+                    if (saveBtnText) {
+                        saveBtnText.innerText = "Saved!";
+                        setTimeout(() => {
+                            saveBtnText.innerText = "Save to Cloud";
+                        }, 2000);
+                    }
+                }
+            } catch (err) {
+                console.error("Cloud Save Error:", err);
+                isSyncing = false;
+                updateSyncStatus('error', 'Cloud Save Failed');
+            }
+        }
+
+        // Debounced Auto-Save trigger
+        window.triggerAutoSave = function(count) {
+            updateSyncStatus('syncing', 'Auto-saving...');
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(() => {
+                saveGemDataToCloud(count);
+            }, 600); // 600ms debounce
+        };
+
+        // Manual Save Button Handler
+        window.manualSaveToCloud = function() {
+            if (window.gems) {
+                saveGemDataToCloud(window.gems.length, true);
+            }
+        };
+
+        // Authenticate & Attach Real-Time Cloud Listener
+        async function initCloudDatabase() {
+            try {
+                // RULE 3: Auth First
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    const cred = await signInWithCustomToken(auth, __initial_auth_token);
+                    currentUser = cred.user;
+                } else {
+                    const cred = await signInAnonymously(auth);
+                    currentUser = cred.user;
+                }
+
+                const userId = currentUser.uid;
+                
+                // RULE 1: Strict Paths for public data artifact
+                dbDocRef = doc(db, 'artifacts', appId, 'users', userId, 'gemData', 'jarState');
+
+                // Realtime Listener
+                onSnapshot(dbDocRef, (snapshot) => {
+                    if (snapshot.exists()) {
+                        const data = snapshot.data();
+                        if (typeof data.gemCount === 'number') {
+                            updateSyncStatus('saved', 'Loaded from Cloud');
+                            // Sync state to local gem canvas if not mid-animation
+                            if (window.syncGemsFromCloud && !isSyncing) {
+                                window.syncGemsFromCloud(data.gemCount);
+                            }
+                        }
+                    } else {
+                        // First time document creation
+                        saveGemDataToCloud(0);
+                    }
+                }, (error) => {
+                    console.error("Firestore Listener Error:", error);
+                    updateSyncStatus('error', 'Sync Listener Error');
+                });
+
+            } catch (err) {
+                console.error("Cloud Database Auth Error:", err);
+                updateSyncStatus('error', 'Auth Failed');
+            }
+        }
+
+        // Initialize Firebase on window load
+        window.addEventListener('DOMContentLoaded', () => {
+            initCloudDatabase();
+        });
+    </script>
+
+    <script>
+        /* Theme Toggle Logic */
+        let isDarkMode = true; // Auto Dark Mode by default
+
+        function applyTheme() {
+            const body = document.getElementById('appBody');
+            const themeIcon = document.getElementById('themeIcon');
+            const themeText = document.getElementById('themeText');
+
+            if (isDarkMode) {
+                body.classList.remove('light');
+                body.classList.add('dark', 'bg-slate-900', 'text-slate-100');
+                body.classList.remove('bg-slate-100', 'text-slate-800');
+                themeIcon.innerText = '🌙';
+                themeText.innerText = 'Dark';
+            } else {
+                body.classList.remove('dark');
+                body.classList.add('light', 'bg-slate-100', 'text-slate-800');
+                body.classList.remove('bg-slate-900', 'text-slate-100');
+                themeIcon.innerText = '☀️';
+                themeText.innerText = 'Light';
+            }
+        }
+
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            applyTheme();
+        }
+
+        /* Web Audio API Sound Synthesizer */
+        let audioCtx = null;
+        let soundEnabled = true;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playGemSound(pitchMultiplier = 1) {
+            if (!soundEnabled) return;
+            initAudio();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc.type = 'sine';
+            const baseFreq = 850 * pitchMultiplier;
+            osc.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.8, audioCtx.currentTime + 0.12);
+
+            gain.gain.setValueAtTime(0.22, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.15);
+        }
+
+        function playVictorySound() {
+            if (!soundEnabled) return;
+            initAudio();
+            const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98];
+            notes.forEach((freq, index) => {
+                setTimeout(() => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.35);
+                }, index * 90);
+            });
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('soundToggleBtn').innerText = soundEnabled ? '🔊' : '🔇';
+        }
+
+        // Canvas & Physics Configuration
+        const canvas = document.getElementById('jarCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Gem Multi-Faceted Color Palettes
+        const GEM_PALETTES = [
+            { name: 'Diamond', light: '#ffffff', mid: '#b9f2ff', dark: '#46a0c0', shadow: '#1c556b' },
+            { name: 'Ruby', light: '#ffb3c6', mid: '#ff0048', dark: '#b30032', shadow: '#66001d' },
+            { name: 'Sapphire', light: '#b3d9ff', mid: '#0066ff', dark: '#0040a8', shadow: '#002259' },
+            { name: 'Emerald', light: '#b3ffcc', mid: '#00cc55', dark: '#008035', shadow: '#00471d' },
+            { name: 'Amethyst', light: '#f0b3ff', mid: '#b300ff', dark: '#7300a4', shadow: '#40005c' },
+            { name: 'Topaz', light: '#ffecb3', mid: '#ffaa00', dark: '#b37700', shadow: '#664400' }
+        ];
+
+        window.gems = [];
+        const MAX_GEMS = 50;
+
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // Gem Class for 2D Diamond Facet Rendering and Physics
+        class Gem {
+            constructor(x, y, palette) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 3;
+                this.vy = Math.random() * 2;
+                this.size = 12.5 + Math.random() * 2.5;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.vRot = (Math.random() - 0.5) * 0.08;
+                this.palette = palette || GEM_PALETTES[Math.floor(Math.random() * GEM_PALETTES.length)];
+                this.bounciness = 0.25;
+                this.friction = 0.94;
+                this.scale = 0;
+                this.sparkleTimer = Math.random() * 100;
+            }
+
+            update(width, height) {
+                if (this.scale < 1) {
+                    this.scale += 0.15;
+                    if (this.scale > 1) this.scale = 1;
+                }
+
+                // Gravity
+                this.vy += 0.42;
+
+                // Move
+                this.x += this.vx;
+                this.y += this.vy;
+                this.rotation += this.vRot;
+
+                // Friction
+                this.vx *= this.friction;
+                this.vy *= this.friction;
+
+                // Jar Bottom Floor
+                const bottomMargin = 22;
+                if (this.y + this.size > height - bottomMargin) {
+                    this.y = height - bottomMargin - this.size;
+                    this.vy *= -this.bounciness;
+                    this.vx *= 0.8;
+                    this.vRot *= 0.8;
+                }
+
+                // Jar Side Walls
+                const wallMargin = 18;
+                if (this.x - this.size < wallMargin) {
+                    this.x = wallMargin + this.size;
+                    this.vx *= -this.bounciness;
+                }
+                if (this.x + this.size > width - wallMargin) {
+                    this.x = width - wallMargin - this.size;
+                    this.vx *= -this.bounciness;
+                }
+
+                this.sparkleTimer += 1;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.scale(this.scale, this.scale);
+
+                const s = this.size;
+                const p = this.palette;
+
+                // 1. Pavilion Facets
+                ctx.beginPath();
+                ctx.moveTo(0, s * 1.1);
+                ctx.lineTo(-s, 0);
+                ctx.lineTo(0, 0);
+                ctx.fillStyle = p.shadow;
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.moveTo(0, s * 1.1);
+                ctx.lineTo(s, 0);
+                ctx.lineTo(0, 0);
+                ctx.fillStyle = p.dark;
+                ctx.fill();
+
+                // 2. Crown Facets
+                ctx.beginPath();
+                ctx.moveTo(-s, 0);
+                ctx.lineTo(-s * 0.6, -s * 0.7);
+                ctx.lineTo(0, -s * 0.7);
+                ctx.lineTo(0, 0);
+                ctx.fillStyle = p.mid;
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.moveTo(s, 0);
+                ctx.lineTo(s * 0.6, -s * 0.7);
+                ctx.lineTo(0, -s * 0.7);
+                ctx.lineTo(0, 0);
+                ctx.fillStyle = p.light;
+                ctx.fill();
+
+                // 3. Table Mirror Facet
+                ctx.beginPath();
+                ctx.moveTo(-s * 0.6, -s * 0.7);
+                ctx.lineTo(s * 0.6, -s * 0.7);
+                ctx.lineTo(s * 0.3, -s * 0.3);
+                ctx.lineTo(-s * 0.3, -s * 0.3);
+                ctx.closePath();
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+
+                // Facet Outlines
+                ctx.beginPath();
+                ctx.moveTo(0, s * 1.1);
+                ctx.lineTo(-s, 0);
+                ctx.lineTo(-s * 0.6, -s * 0.7);
+                ctx.lineTo(s * 0.6, -s * 0.7);
+                ctx.lineTo(s, 0);
+                ctx.closePath();
+                ctx.moveTo(-s, 0);
+                ctx.lineTo(s, 0);
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, s * 1.1);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.lineWidth = 0.8;
+                ctx.stroke();
+
+                // Sparkle Glint
+                if (Math.sin(this.sparkleTimer * 0.1) > 0.85) {
+                    ctx.beginPath();
+                    ctx.arc(-s * 0.2, -s * 0.5, 2, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowColor = '#ffffff';
+                    ctx.shadowBlur = 6;
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+        }
+
+        function resolveCollisions() {
+            for (let i = 0; i < window.gems.length; i++) {
+                for (let j = i + 1; j < window.gems.length; j++) {
+                    const g1 = window.gems[i];
+                    const g2 = window.gems[j];
+
+                    const dx = g2.x - g1.x;
+                    const dy = g2.y - g1.y;
+                    const dist = Math.hypot(dx, dy);
+                    const minDist = g1.size + g2.size;
+
+                    if (dist < minDist && dist > 0) {
+                        const overlap = minDist - dist;
+                        const nx = dx / dist;
+                        const ny = dy / dist;
+
+                        g1.x -= nx * overlap * 0.5;
+                        g1.y -= ny * overlap * 0.5;
+                        g2.x += nx * overlap * 0.5;
+                        g2.y += ny * overlap * 0.5;
+
+                        const kx = g1.vx - g2.vx;
+                        const ky = g1.vy - g2.vy;
+                        const p = 2 * (nx * kx + ny * ky) / 2;
+
+                        g1.vx -= p * nx * 0.5;
+                        g1.vy -= p * ny * 0.5;
+                        g2.vx += p * nx * 0.5;
+                        g2.vy += p * ny * 0.5;
+                    }
+                }
+            }
+        }
+
+        let celebrateTriggered = false;
+
+        function modifyGems(amount) {
+            const currentCount = window.gems.length;
+            let targetCount = currentCount + amount;
+
+            if (targetCount > MAX_GEMS) targetCount = MAX_GEMS;
+            if (targetCount < 0) targetCount = 0;
+
+            const diff = targetCount - currentCount;
+
+            if (diff > 0) {
+                for (let i = 0; i < diff; i++) {
+                    setTimeout(() => {
+                        if (window.gems.length < MAX_GEMS) {
+                            const spawnX = canvas.width / 2 + (Math.random() - 0.5) * (canvas.width * 0.4);
+                            const spawnY = -15;
+                            window.gems.push(new Gem(spawnX, spawnY));
+                            playGemSound(0.9 + (window.gems.length / MAX_GEMS) * 0.6);
+                            updateUI();
+                        }
+                    }, i * 40);
+                }
+            } else if (diff < 0) {
+                const removeCount = Math.abs(diff);
+                for (let i = 0; i < removeCount; i++) {
+                    if (window.gems.length > 0) {
+                        window.gems.pop();
+                    }
+                }
+                playGemSound(0.6);
+                updateUI();
+            }
+        }
+
+        function resetJar() {
+            window.gems = [];
+            celebrateTriggered = false;
+            updateUI();
+            playGemSound(0.5);
+        }
+
+        // Sync local gem canvas state with Cloud Database
+        window.syncGemsFromCloud = function(targetCount) {
+            targetCount = Math.min(Math.max(targetCount, 0), MAX_GEMS);
+            const currentCount = window.gems.length;
+
+            if (targetCount === currentCount) return;
+
+            if (targetCount < currentCount) {
+                window.gems = window.gems.slice(0, targetCount);
+            } else {
+                const missing = targetCount - currentCount;
+                for (let i = 0; i < missing; i++) {
+                    const spawnX = canvas.width / 2 + (Math.random() - 0.5) * (canvas.width * 0.4);
+                    const spawnY = canvas.height - 35 - Math.random() * 150;
+                    const gem = new Gem(spawnX, spawnY);
+                    gem.scale = 1;
+                    window.gems.push(gem);
+                }
+            }
+            updateUI(false); // Update local UI without re-triggering auto-save loop
+        };
+
+        function updateUI(triggerSave = true) {
+            const count = window.gems.length;
+
+            // Counter & Progress Bar
+            document.getElementById('counterText').innerText = `${count} / ${MAX_GEMS}`;
+            const percentage = (count / MAX_GEMS) * 100;
+            document.getElementById('progressBar').style.width = `${percentage}%`;
+
+            // Button Safeguards
+            document.getElementById('btnAdd1').disabled = count >= MAX_GEMS;
+            document.getElementById('btnAdd10').disabled = count >= MAX_GEMS;
+            document.getElementById('btnSub1').disabled = count <= 0;
+            document.getElementById('btnSub10').disabled = count <= 0;
+
+            // Full Banner & Celebration
+            const fullBanner = document.getElementById('fullBanner');
+            const fullBannerCard = document.getElementById('fullBannerCard');
+
+            if (count === MAX_GEMS) {
+                if (!celebrateTriggered) {
+                    celebrateTriggered = true;
+                    playVictorySound();
+                    
+                    confetti({
+                        particleCount: 120,
+                        spread: 80,
+                        origin: { y: 0.6 },
+                        colors: ['#00e5ff', '#3d5af1', '#00e676', '#ff007f', '#ffffff']
+                    });
+
+                    setTimeout(() => {
+                        confetti({
+                            particleCount: 60,
+                            angle: 60,
+                            spread: 60,
+                            origin: { x: 0 }
+                        });
+                        confetti({
+                            particleCount: 60,
+                            angle: 120,
+                            spread: 60,
+                            origin: { x: 1 }
+                        });
+                    }, 250);
+
+                    fullBanner.classList.remove('opacity-0', 'pointer-events-none');
+                    fullBannerCard.classList.remove('scale-90');
+                    fullBannerCard.classList.add('scale-100');
+                }
+            } else {
+                celebrateTriggered = false;
+                fullBanner.classList.add('opacity-0', 'pointer-events-none');
+                fullBannerCard.classList.remove('scale-100');
+                fullBannerCard.classList.add('scale-90');
+            }
+
+            // Trigger Database Auto Save
+            if (triggerSave && window.triggerAutoSave) {
+                window.triggerAutoSave(count);
+            }
+        }
+
+        // Animation Loop
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            window.gems.forEach(gem => {
+                gem.update(canvas.width, canvas.height);
+            });
+
+            resolveCollisions();
+
+            window.gems.forEach(gem => {
+                gem.draw(ctx);
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        window.onload = () => {
+            applyTheme();
+            resizeCanvas();
+            animate();
+        };
+    </script>
+</body>
+</html>
